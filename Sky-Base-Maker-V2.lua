@@ -1,509 +1,444 @@
---[[
-  🚀 Sky-Base-Maker (Full LocalScript)
-  - Đặt script này dưới dạng LocalScript trong StarterPlayerScripts
-  - Tính năng:
-    • Animation intro (TweenService)
-    • Giao diện sạch sẽ với highlight màu trắng nhạt
-    • Thanh trượt để điều chỉnh chiều cao BasePart
-    • Thêm/Xóa phần tử dưới chân người chơi (raycast)
-    • Kéo giao diện qua UserInputService
-    • Kiểm tra phòng ngừa cho respawn/parts bị khóa/parts bị destroy
-  Tác giả: adjusted for you (MidoriMidoru style)
+--[[ 
+  Sky-Base-Maker-V2.lua
+  Full Local/client script (sẵn cho loadstring(game:HttpGet(...))())
+  - Tự động dọn GUI cũ
+  - _G flag để tránh chạy trùng
+  - Tween intro, UI trắng nhạt, highlight trắng nhạt
+  - Raycast thay vì Ray.new
+  - Drag bằng UserInputService (không dùng Frame.Draggable)
+  - Ghi chú (Việt) trong code để bạn dễ theo dõi
 --]]
 
--- ===========================
--- 🔧 Services & Utils
--- ===========================
-local StarterGui = game:GetService("StarterGui")
-local TweenService = game:GetService("TweenService")
+-- ======= Prevent double-run =======
+if _G.SkyBaseMakerV2Loaded then
+    -- Nếu muốn reload: trước khi chạy lại, chạy _G.SkyBaseMakerV2Loaded = nil
+    return
+end
+_G.SkyBaseMakerV2Loaded = true
+
+-- ======= Services =======
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 local Lighting = game:GetService("Lighting")
+local Workspace = game:GetService("Workspace")
+local StarterGui = game:GetService("StarterGui")
 
--- Hiệu ứng loading intro
-StarterGui:SetCore("SendNotification", {
-    Title = "Đang tải...",
-    Text = "Sky-Base-Maker by MidoriMidoru_73816",
-    Duration = 3,
-    Icon = "rbxassetid://0"
-})
+-- ======= Local player / PlayerGui (chờ sẵn) =======
+local LocalPlayer = Players.LocalPlayer
+if not LocalPlayer then
+    warn("[SkyBaseMaker] Không tìm thấy LocalPlayer (script cần chạy trên client).")
+    return
+end
+local playerGui = LocalPlayer:WaitForChild("PlayerGui")
 
--- Xóa fog và atmosphere
+-- ======= Cleanup previous GUI nếu có =======
+local existing = playerGui:FindFirstChild("SkyBaseMakerGui")
+if existing then
+    existing:Destroy()
+    safeWait = function() end -- noop if not defined yet
+end
+
+-- ======= Small helpers =======
+local function safeWait(t)
+    if t and t > 0 then task.wait(t) end
+end
+
+local function tryNotify(title, text, dur)
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = title or "Sky-Base-Maker",
+            Text = text or "",
+            Duration = dur or 2,
+        })
+    end)
+end
+
+-- ======= Environment tweaks (fog/atmosphere) =======
 local function clearFog()
-    Lighting.FogStart = 0
-    Lighting.FogEnd = 1e9
+    pcall(function()
+        Lighting.FogStart = 0
+        Lighting.FogEnd = 1e9
+    end)
 end
 
 local function neuterAtmosphere(a)
     if a and a:IsA("Atmosphere") then
-        a.Density = 0
-        pcall(function() a.Haze = 0 end)
-        pcall(function() a.Glare = 0 end)
-        a:GetPropertyChangedSignal("Density"):Connect(function()
-            a.Density = 0
-        end)
-        pcall(function()
-            a:GetPropertyChangedSignal("Haze"):Connect(function()
-                a.Haze = 0
-            end)
-        end)
-        pcall(function()
-            a:GetPropertyChangedSignal("Glare"):Connect(function()
-                a.Glare = 0
-            end)
-        end)
+        pcall(function() a.Density = 0 end)
+        pcall(function() if a:GetAttribute then a.Haze = 0 end end)
+        pcall(function() a:GetPropertyChangedSignal("Density"):Connect(function() a.Density = 0 end) end)
+        -- Haze/Glare not always present; pcall safe
+        pcall(function() a:GetPropertyChangedSignal("Haze"):Connect(function() a.Haze = 0 end) end)
+        pcall(function() a:GetPropertyChangedSignal("Glare"):Connect(function() a.Glare = 0 end) end)
     end
 end
 
 clearFog()
-for _, child in ipairs(Lighting:GetChildren()) do
-    neuterAtmosphere(child)
-end
-
+for _, c in ipairs(Lighting:GetChildren()) do neuterAtmosphere(c) end
 Lighting.ChildAdded:Connect(neuterAtmosphere)
 Lighting:GetPropertyChangedSignal("FogStart"):Connect(clearFog)
 Lighting:GetPropertyChangedSignal("FogEnd"):Connect(clearFog)
 
--- Tạo giao diện chính
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "SkyBaseMakerUI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+-- Start notification
+tryNotify("loading...", "made by MidoriMidoru_73816", 3)
 
--- Tạo overlay intro animation
+-- ======= Create main ScreenGui =======
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "SkyBaseMakerGui"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = playerGui
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- ======= Intro (TweenService) =======
 local introFrame = Instance.new("Frame")
-introFrame.Size = UDim2.new(1, 0, 1, 0)
-introFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-introFrame.BackgroundTransparency = 0
-introFrame.ZIndex = 100
+introFrame.Name = "IntroCover"
+introFrame.Size = UDim2.new(1,0,1,0)
+introFrame.Position = UDim2.new(0,0,0,0)
+introFrame.BackgroundColor3 = Color3.fromRGB(18,18,18)
+introFrame.BackgroundTransparency = 1
+introFrame.BorderSizePixel = 0
+introFrame.ZIndex = 50
 introFrame.Parent = screenGui
 
-local introText = Instance.new("TextLabel")
-introText.Size = UDim2.new(0, 400, 0, 100)
-introText.Position = UDim2.new(0.5, -200, 0.5, -50)
-introText.Text = "SKY BASE MAKER"
-introText.TextColor3 = Color3.fromRGB(255, 255, 255)
-introText.TextScaled = true
-introText.Font = Enum.Font.SourceSansBold
-introText.BackgroundTransparency = 1
-introText.ZIndex = 101
-introText.Parent = introFrame
+local introLabel = Instance.new("TextLabel")
+introLabel.Name = "IntroLabel"
+introLabel.Size = UDim2.new(1,0,0,120)
+introLabel.Position = UDim2.new(0,0,0.44,0)
+introLabel.BackgroundTransparency = 1
+introLabel.Font = Enum.Font.GothamBold
+introLabel.TextScaled = true
+introLabel.Text = "☁️ SKY-BASE-MAKER ☁️"
+introLabel.TextColor3 = Color3.fromRGB(255,255,255)
+introLabel.TextTransparency = 1
+introLabel.ZIndex = 51
+introLabel.Parent = introFrame
 
-local subText = Instance.new("TextLabel")
-subText.Size = UDim2.new(0, 300, 0, 30)
-subText.Position = UDim2.new(0.5, -150, 0.5, 40)
-subText.Text = "by MidoriMidoru_73816"
-subText.TextColor3 = Color3.fromRGB(200, 200, 200)
-subText.TextScaled = true
-subText.Font = Enum.Font.SourceSans
-subText.BackgroundTransparency = 1
-subText.ZIndex = 101
-subText.Parent = introFrame
-
--- Animation intro
-spawn(function()
-    local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    
-    -- Fade in text
-    local textTween = TweenService:Create(introText, tweenInfo, {TextTransparency = 0})
-    local subTextTween = TweenService:Create(subText, tweenInfo, {TextTransparency = 0})
-    textTween:Play()
-    subTextTween:Play()
-    
-    wait(2)
-    
-    -- Fade out everything
-    local fadeOutTween = TweenService:Create(introFrame, TweenInfo.new(1.5), {BackgroundTransparency = 1})
-    local textFadeOut = TweenService:Create(introText, TweenInfo.new(1.5), {TextTransparency = 1})
-    local subTextFadeOut = TweenService:Create(subText, TweenInfo.new(1.5), {TextTransparency = 1})
-    
-    fadeOutTween:Play()
-    textFadeOut:Play()
-    subTextFadeOut:Play()
-    
-    fadeOutTween.Completed:Connect(function()
-        introFrame:Destroy()
-    end)
-end)
-
--- Tạo frame chính
+-- ======= Main Panel (hidden until intro done) =======
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 280, 0, 200)
-frame.Position = UDim2.new(0.5, -140, 0.5, -100)
-frame.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+frame.Name = "MainPanel"
+frame.Size = UDim2.new(0, 300, 0, 160)
+frame.Position = UDim2.new(0.5, -150, 0.06, 0)
+frame.BackgroundColor3 = Color3.fromRGB(40,40,40)
 frame.BorderSizePixel = 0
-frame.AnchorPoint = Vector2.new(0.5, 0.5)
-frame.Active = true
-frame.Visible = false  -- Ẩn cho đến khi intro kết thúc
+frame.ZIndex = 20
+frame.Visible = false
 frame.Parent = screenGui
 
--- Hiệu ứng bóng đổ
-local uiCorner = Instance.new("UICorner")
-uiCorner.CornerRadius = UDim.new(0, 8)
-uiCorner.Parent = frame
+-- TitleBar (drag handle)
+local titleBar = Instance.new("Frame")
+titleBar.Name = "TitleBar"
+titleBar.Size = UDim2.new(1,0,0,34)
+titleBar.Position = UDim2.new(0,0,0,0)
+titleBar.BackgroundColor3 = Color3.fromRGB(60,60,60)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = frame
 
-local uiStroke = Instance.new("UIStroke")
-uiStroke.Color = Color3.fromRGB(80, 80, 90)
-uiStroke.Thickness = 2
-uiStroke.Parent = frame
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1,-8,1,0)
+titleLabel.Position = UDim2.new(0,8,0,0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.Text = "SKY BASE MAKER_v2"
+titleLabel.TextColor3 = Color3.fromRGB(255,255,255)
+titleLabel.TextSize = 14
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = titleBar
 
--- Tiêu đề
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 40)
-title.Text = "SKY BASE MAKER v2.0"
-title.TextColor3 = Color3.fromRGB(220, 220, 220)
-title.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
-title.Font = Enum.Font.SourceSansBold
-title.TextSize = 18
-title.BorderSizePixel = 0
-title.Parent = frame
-
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 8)
-titleCorner.Parent = title
-
--- Frame thanh trượt
+-- Slider area
 local sliderFrame = Instance.new("Frame")
-sliderFrame.Size = UDim2.new(1, -20, 0, 50)
-sliderFrame.Position = UDim2.new(0, 10, 0, 50)
-sliderFrame.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+sliderFrame.Name = "SliderFrame"
+sliderFrame.Size = UDim2.new(1,-20,0,44)
+sliderFrame.Position = UDim2.new(0,10,0,44)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(80,80,80)
 sliderFrame.BorderSizePixel = 0
 sliderFrame.Parent = frame
 
-local sliderCorner = Instance.new("UICorner")
-sliderCorner.CornerRadius = UDim.new(0, 6)
-sliderCorner.Parent = sliderFrame
-
--- Thanh trượt
 local sliderBar = Instance.new("Frame")
-sliderBar.Size = UDim2.new(1, -20, 0, 6)
-sliderBar.Position = UDim2.new(0, 10, 0.5, -3)
-sliderBar.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+sliderBar.Name = "SliderBar"
+sliderBar.Size = UDim2.new(1,-24,0,12)
+sliderBar.Position = UDim2.new(0,12,0.5,-6)
+sliderBar.BackgroundColor3 = Color3.fromRGB(120,120,120)
 sliderBar.BorderSizePixel = 0
 sliderBar.Parent = sliderFrame
 
-local barCorner = Instance.new("UICorner")
-barCorner.CornerRadius = UDim.new(0, 3)
-barCorner.Parent = sliderBar
-
--- Nút trượt
 local sliderButton = Instance.new("TextButton")
-sliderButton.Size = UDim2.new(0, 20, 0, 20)
-sliderButton.Position = UDim2.new(0, 0, 0.5, -10)
-sliderButton.Text = ""
-sliderButton.BackgroundColor3 = Color3.fromRGB(220, 220, 220)
+sliderButton.Name = "SliderButton"
+sliderButton.Size = UDim2.new(0,20,0,20)
+sliderButton.Position = UDim2.new(0, -10, 0.5, -10)
+sliderButton.BackgroundColor3 = Color3.fromRGB(200,200,200)
 sliderButton.BorderSizePixel = 0
+sliderButton.Text = ""
 sliderButton.Parent = sliderFrame
 
-local buttonCorner = Instance.new("UICorner")
-buttonCorner.CornerRadius = UDim.new(0, 10)
-buttonCorner.Parent = sliderButton
+local sliderValueLabel = Instance.new("TextLabel")
+sliderValueLabel.Name = "SliderValue"
+sliderValueLabel.Size = UDim2.new(0,60,0,18)
+sliderValueLabel.Position = UDim2.new(1,-70,0.5,-9)
+sliderValueLabel.BackgroundTransparency = 1
+sliderValueLabel.Font = Enum.Font.GothamSemibold
+sliderValueLabel.Text = "H: 0"
+sliderValueLabel.TextColor3 = Color3.fromRGB(230,230,230)
+sliderValueLabel.TextSize = 14
+sliderValueLabel.Parent = sliderFrame
 
--- Hiển thị giá trị
-local valueLabel = Instance.new("TextLabel")
-valueLabel.Size = UDim2.new(0, 40, 0, 20)
-valueLabel.Position = UDim2.new(1, -40, 0, 5)
-valueLabel.Text = "0"
-valueLabel.TextColor3 = Color3.fromRGB(220, 220, 220)
-valueLabel.BackgroundTransparency = 1
-valueLabel.Font = Enum.Font.SourceSansSemibold
-valueLabel.TextSize = 16
-valueLabel.Parent = sliderFrame
+-- Buttons row
+local buttonsFrame = Instance.new("Frame")
+buttonsFrame.Name = "ButtonsRow"
+buttonsFrame.Size = UDim2.new(1,-20,0,40)
+buttonsFrame.Position = UDim2.new(0,10,0,98)
+buttonsFrame.BackgroundTransparency = 1
+buttonsFrame.Parent = frame
 
--- Nút thêm
 local addButton = Instance.new("TextButton")
-addButton.Size = UDim2.new(0.45, -5, 0, 35)
-addButton.Position = UDim2.new(0, 10, 0, 110)
-addButton.Text = "⚓️ THÊM"
-addButton.TextColor3 = Color3.fromRGB(240, 240, 240)
-addButton.BackgroundColor3 = Color3.fromRGB(70, 150, 70)
-addButton.Font = Enum.Font.SourceSansSemibold
+addButton.Name = "AddBtn"
+addButton.Size = UDim2.new(0.48,0,1,0)
+addButton.Position = UDim2.new(0,0,0,0)
+addButton.Text = "⚓️  ADD"
+addButton.Font = Enum.Font.GothamSemibold
 addButton.TextSize = 14
+addButton.TextColor3 = Color3.fromRGB(40,40,40)
+addButton.BackgroundColor3 = Color3.fromRGB(235,235,235)
 addButton.BorderSizePixel = 0
-addButton.Parent = frame
+addButton.Parent = buttonsFrame
 
-local addCorner = Instance.new("UICorner")
-addCorner.CornerRadius = UDim.new(0, 6)
-addCorner.Parent = addButton
-
--- Nút xóa
 local removeButton = Instance.new("TextButton")
-removeButton.Size = UDim2.new(0.45, -5, 0, 35)
-removeButton.Position = UDim2.new(0.55, 0, 0, 110)
-removeButton.Text = "✂️ XÓA"
-removeButton.TextColor3 = Color3.fromRGB(240, 240, 240)
-removeButton.BackgroundColor3 = Color3.fromRGB(180, 70, 70)
-removeButton.Font = Enum.Font.SourceSansSemibold
+removeButton.Name = "RemoveBtn"
+removeButton.Size = UDim2.new(0.48,0,1,0)
+removeButton.Position = UDim2.new(0.52,0,0,0)
+removeButton.Text = "✂️  REMOVE"
+removeButton.Font = Enum.Font.GothamSemibold
 removeButton.TextSize = 14
+removeButton.TextColor3 = Color3.fromRGB(255,255,255)
+removeButton.BackgroundColor3 = Color3.fromRGB(180,80,80)
 removeButton.BorderSizePixel = 0
-removeButton.Parent = frame
+removeButton.Parent = buttonsFrame
 
-local removeCorner = Instance.new("UICorner")
-removeCorner.CornerRadius = UDim.new(0, 6)
-removeCorner.Parent = removeButton
-
--- Nút ẩn/hiện
+-- Toggle button (mini)
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 100, 0, 35)
-toggleButton.Position = UDim2.new(0.5, -50, 0, 155)
-toggleButton.Text = "📋 HIỆN UI"
-toggleButton.TextColor3 = Color3.fromRGB(240, 240, 240)
-toggleButton.BackgroundColor3 = Color3.fromRGB(60, 100, 150)
-toggleButton.Font = Enum.Font.SourceSansSemibold
-toggleButton.TextSize = 14
+toggleButton.Name = "ToggleMini"
+toggleButton.Size = UDim2.new(0,56,0,28)
+toggleButton.Position = UDim2.new(0.02,0,0.88,0)
+toggleButton.Text = "😙"
+toggleButton.Font = Enum.Font.SourceSansBold
+toggleButton.TextSize = 16
+toggleButton.BackgroundColor3 = Color3.fromRGB(100,100,200)
 toggleButton.BorderSizePixel = 0
-toggleButton.Parent = frame
+toggleButton.ZIndex = 22
+toggleButton.Parent = screenGui
+toggleButton.Visible = false
 
-local toggleCorner = Instance.new("UICorner")
-toggleCorner.CornerRadius = UDim.new(0, 6)
-toggleCorner.Parent = toggleButton
-
--- Label hướng dẫn
-local helpLabel = Instance.new("TextLabel")
-helpLabel.Size = UDim2.new(1, -20, 0, 40)
-helpLabel.Position = UDim2.new(0, 10, 0, 195)
-helpLabel.Text = "Chọn phần tử dưới chân và điều chỉnh độ cao"
-helpLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
-helpLabel.BackgroundTransparency = 1
-helpLabel.Font = Enum.Font.SourceSans
-helpLabel.TextSize = 12
-helpLabel.TextWrapped = true
-helpLabel.Parent = frame
-
--- Biến toàn cục
-local targets = {}
-local dragging = false
+-- ======= State =======
+local targets = {} -- part -> { highlight, conn }
+local isDragging = false
+local dragOffset = Vector2.new(0,0)
 local sliderValue = 0
 local lastCheck = 0
-local isUIVisible = false
 
--- Hiển thị UI với animation
-local function showUI()
-    frame.Visible = true
-    isUIVisible = true
-    toggleButton.Text = "📋 ẨN UI"
-    
-    -- Animation hiện
-    frame.Position = UDim2.new(0.5, -140, 0.3, -100)
-    local tween = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), 
-        {Position = UDim2.new(0.5, -140, 0.5, -100)})
-    tween:Play()
-end
+-- raycast params
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
--- Ẩn UI với animation
-local function hideUI()
-    isUIVisible = false
-    toggleButton.Text = "📋 HIỆN UI"
-    
-    -- Animation ẩn
-    local tween = TweenService:Create(frame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.In), 
-        {Position = UDim2.new(0.5, -140, 0.3, -100)})
-    tween:Play()
-    
-    tween.Completed:Connect(function()
-        frame.Visible = false
-    end)
-end
-
--- Hiển thị UI sau khi intro kết thúc
-delay(4, function()
-    showUI()
-    
-    -- Thông báo hướng dẫn
-    StarterGui:SetCore("SendNotification", {
-        Title = "Hướng dẫn",
-        Text = "Sử dụng thanh trượt để điều chỉnh độ cao",
-        Duration = 5,
-    })
-end)
-
--- Lấy phần tử dưới chân người chơi
+-- ======= Raycast to find part under feet =======
 local function getFootPart()
-    local character = LocalPlayer.Character
-    if not character then return nil end
-    
-    local root = character:FindFirstChild("HumanoidRootPart")
+    local char = LocalPlayer.Character
+    if not (char and char.Parent) then return nil end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
     if not root then return nil end
-    
-    -- Sử dụng Raycast để tìm phần tử chính xác hơn
-    local rayOrigin = root.Position
-    local rayDirection = Vector3.new(0, -10, 0)
-    local raycastParams = RaycastParams.new()
-    raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {character}
-    
-    local raycastResult = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-    if raycastResult and raycastResult.Instance then
-        return raycastResult.Instance
+    rayParams.FilterDescendantsInstances = {char}
+    local origin = root.Position
+    local dir = Vector3.new(0, -6, 0)
+    local hit = Workspace:Raycast(origin, dir, rayParams)
+    if hit and hit.Instance and hit.Instance:IsA("BasePart") then
+        return hit.Instance
     end
-    
     return nil
 end
 
--- Tạo highlight với màu trắng nhạt
-local function ensureHighlight(part)
-    if not part or not part:IsA("BasePart") then return end
-    
-    local highlight = part:FindFirstChild("PersistentHighlight")
-    if not highlight then
-        highlight = Instance.new("Highlight")
-        highlight.Name = "PersistentHighlight"
-        highlight.Adornee = part
-        highlight.FillColor = Color3.fromRGB(255, 255, 255)  -- Màu trắng
-        highlight.FillTransparency = 0.7  -- Trong suốt 70%
-        highlight.OutlineColor = Color3.fromRGB(200, 200, 200)
-        highlight.OutlineTransparency = 0.3
-        highlight.Parent = part
+-- ======= Highlight functions (white-ish) =======
+local HIGHLIGHT_COLOR = Color3.fromRGB(220,220,220)
+local function attachHighlight(part)
+    if not (part and part:IsA("BasePart")) then return end
+    if targets[part] then return end
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "PersistentHighlight"
+    highlight.Adornee = part
+    highlight.FillColor = HIGHLIGHT_COLOR
+    highlight.FillTransparency = 0.45
+    highlight.OutlineColor = Color3.fromRGB(255,255,255)
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = part
+
+    local conn = part.AncestryChanged:Connect(function()
+        if not part:IsDescendantOf(game) then
+            if highlight and highlight.Parent then highlight:Destroy() end
+            if targets[part] and targets[part].conn then targets[part].conn:Disconnect() end
+            targets[part] = nil
+        end
+    end)
+
+    targets[part] = { highlight = highlight, conn = conn }
+end
+
+local function detachHighlight(part)
+    if not part then return end
+    local meta = targets[part]
+    if meta then
+        if meta.highlight and meta.highlight.Parent then meta.highlight:Destroy() end
+        if meta.conn then meta.conn:Disconnect() end
+        targets[part] = nil
     end
 end
 
--- Xóa highlight
-local function removeHighlight(part)
-    local highlight = part and part:FindFirstChild("PersistentHighlight")
-    if highlight then
-        highlight:Destroy()
-    end
-end
-
--- Cập nhật thanh trượt
-local function updateSlider(inputX)
+-- ======= Slider update =======
+local function updateSliderFromX(inputX)
     local barPos = sliderBar.AbsolutePosition.X
     local barSize = sliderBar.AbsoluteSize.X
-    local relativeX = math.clamp(inputX - barPos, 0, barSize)
-    
-    sliderButton.Position = UDim2.new(0, relativeX - 10, 0.5, -10)
-    sliderValue = math.floor((relativeX / barSize) * 100)
-    valueLabel.Text = tostring(sliderValue)
-    
-    -- Cập nhật kích thước cho tất cả các phần tử đã chọn
+    if barSize <= 0 then return end
+    local relX = math.clamp(inputX - barPos, 0, barSize)
+    local halfBtn = math.floor(sliderButton.AbsoluteSize.X / 2)
+    sliderButton.Position = UDim2.new(0, relX - halfBtn, 0.5, - (sliderButton.AbsoluteSize.Y / 2))
+    sliderValue = math.floor((relX / barSize) * 200) -- max 200
+    sliderValueLabel.Text = "H: "..tostring(sliderValue)
     for part, _ in pairs(targets) do
-        if part and part:IsA("BasePart") and part.Parent then
-            part.Size = Vector3.new(part.Size.X, sliderValue, part.Size.Z)
+        if part and part:IsA("BasePart") and not part.Locked then
+            local sx, sy, sz = part.Size.X, part.Size.Y, part.Size.Z
+            pcall(function()
+                part.Size = Vector3.new(sx, math.max(1, sliderValue), sz)
+            end)
         end
     end
 end
 
--- Kéo UI
-local dragInput, dragStart, startPos
-local function updateInput(input)
-    local delta = input.Position - dragStart
-    frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, 
-                              startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+-- init slider pos
+task.defer(function()
+    safeWait(0.05)
+    sliderButton.Position = UDim2.new(0, -10, 0.5, -10)
+    sliderValueLabel.Text = "H: 0"
+end)
+
+-- ======= Drag (titleBar) =======
+do
+    titleBar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = true
+            local mouse = UserInputService:GetMouseLocation()
+            local absPos = frame.AbsolutePosition
+            dragOffset = Vector2.new(mouse.X - absPos.X, mouse.Y - absPos.Y)
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    isDragging = false
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local mouse = UserInputService:GetMouseLocation()
+            local newX = math.clamp(mouse.X - dragOffset.X, 0, workspace.CurrentCamera.ViewportSize.X - frame.AbsoluteSize.X)
+            local newY = math.clamp(mouse.Y - dragOffset.Y, 0, workspace.CurrentCamera.ViewportSize.Y - frame.AbsoluteSize.Y)
+            frame.Position = UDim2.new(0, newX, 0, newY)
+        end
+    end)
 end
 
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragStart = input.Position
-        startPos = frame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-frame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        updateInput(input)
-    end
-end)
-
--- Sự kiện cho thanh trượt
+-- ======= Slider interactions =======
 sliderButton.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        updateSlider(input.Position.X)
+        local conn
+        conn = UserInputService.InputChanged:Connect(function(ch)
+            if ch.UserInputType == Enum.UserInputType.MouseMovement or ch.UserInputType == Enum.UserInputType.Touch then
+                updateSliderFromX(ch.Position.X)
+            end
+        end)
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                if conn then conn:Disconnect() end
+            end
+        end)
     end
 end)
 
 sliderBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        updateSlider(input.Position.X)
+        updateSliderFromX(input.Position.X)
     end
 end)
 
--- Sự kiện cho nút thêm
+-- ======= Add / Remove buttons =======
 addButton.MouseButton1Click:Connect(function()
     local part = getFootPart()
-    if part and not targets[part] then
-        if part:IsA("BasePart") then
-            targets[part] = true
-            ensureHighlight(part)
-            
-            -- Thông báo
-            StarterGui:SetCore("SendNotification", {
-                Title = "Đã thêm",
-                Text = "Phần tử đã được thêm vào danh sách",
-                Duration = 2,
-            })
-        end
+    if not part then
+        tryNotify("Sky-Base-Maker","Không tìm thấy part dưới chân.",2)
+        return
+    end
+    if part.Locked then
+        tryNotify("Sky-Base-Maker","Part bị Locked, không thể chỉnh.",2)
+        return
+    end
+    if part.Size.X > 35 and part.Size.Z > 35 then
+        attachHighlight(part)
+        tryNotify("Sky-Base-Maker","Added target.",1.2)
+    else
+        tryNotify("Sky-Base-Maker","Part quá nhỏ để làm sky base.",1.2)
     end
 end)
 
--- Sự kiện cho nút xóa
 removeButton.MouseButton1Click:Connect(function()
     local part = getFootPart()
     if part and targets[part] then
-        targets[part] = nil
-        removeHighlight(part)
-        
-        -- Thông báo
-        StarterGui:SetCore("SendNotification", {
-            Title = "Đã xóa",
-            Text = "Phần tử đã được xóa khỏi danh sách",
-            Duration = 2,
-        })
-    end
-end)
-
--- Sự kiện cho nút ẩn/hiện
-toggleButton.MouseButton1Click:Connect(function()
-    if isUIVisible then
-        hideUI()
+        detachHighlight(part)
+        tryNotify("Sky-Base-Maker","Removed target.",1.0)
     else
-        showUI()
+        tryNotify("Sky-Base-Maker","No target to remove.",1.0)
     end
 end)
 
--- Kiểm tra và bảo trì các phần tử đã chọn
+toggleButton.MouseButton1Click:Connect(function()
+    frame.Visible = not frame.Visible
+    toggleButton.Text = frame.Visible and "😙" or "😗"
+end)
+
+-- ======= RenderStepped check (cleanup) =======
 RunService.RenderStepped:Connect(function()
     if tick() - lastCheck >= 2 then
         lastCheck = tick()
-        
-        local toRemove = {}
-        
-        for part, _ in pairs(targets) do
-            if not part or not part:IsA("BasePart") or not part.Parent then
-                table.insert(toRemove, part)
+        for part, meta in pairs(targets) do
+            if not part or not part:IsA("BasePart") or not part:IsDescendantOf(game) then
+                if meta and meta.highlight and meta.highlight.Parent then meta.highlight:Destroy() end
+                if meta and meta.conn then meta.conn:Disconnect() end
+                targets[part] = nil
             else
                 if not part:FindFirstChild("PersistentHighlight") then
-                    ensureHighlight(part)
+                    attachHighlight(part)
                 end
             end
         end
-        
-        for _, part in ipairs(toRemove) do
-            targets[part] = nil
-        end
     end
 end)
+
+-- ======= Intro Tween then show UI =======
+do
+    local tweenInInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    local tweenTextInfo = TweenInfo.new(0.6, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+
+    local t1 = TweenService:Create(introFrame, tweenInInfo, { BackgroundTransparency = 0 })
+    local t2 = TweenService:Create(introLabel, tweenTextInfo, { TextTransparency = 0 })
+
+    t1:Play(); t2:Play(); t2.Completed:Wait()
+    safeWait(1.3)
+    local t3 = TweenService:Create(introLabel, tweenInInfo, { TextTransparency = 1 })
+    t3:Play(); t3.Completed:Wait()
+    local t4 = TweenService:Create(introFrame, tweenInInfo, { BackgroundTransparency = 1 })
+    t4:Play(); t4.Completed:Wait()
+
+    if introFrame and introFrame.Parent then introFrame:Destroy() end
+    frame.Visible = true
+    toggleButton.Visible = true
+end
+
+-- ======= Done =======
+-- (Nếu muốn reload script: run `_G.SkyBaseMakerV2Loaded = nil` then re-run)
