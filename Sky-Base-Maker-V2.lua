@@ -90,35 +90,100 @@ screenGui.ResetOnSpawn = false
 screenGui.Parent = playerGui
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- ======= Intro (TweenService) =======
+-- ======= Intro (TweenService) - SKY BASE MAKER STYLE =======
 local introFrame = Instance.new("Frame")
 introFrame.Name = "IntroCover"
-introFrame.Size = UDim2.new(1,0,1,0)
-introFrame.Position = UDim2.new(0,0,0,0)
-introFrame.BackgroundColor3 = Color3.fromRGB(18,18,18)
+introFrame.Size = UDim2.new(1, 0, 1, 0)
+introFrame.Position = UDim2.new(0, 0, 0, 0)
+introFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 18) -- Nền tối, hơi xanh dương
 introFrame.BackgroundTransparency = 1
 introFrame.BorderSizePixel = 0
 introFrame.ZIndex = 50
 introFrame.Parent = screenGui
 
-local introLabel = Instance.new("TextLabel")
-introLabel.Name = "IntroLabel"
-introLabel.Size = UDim2.new(1,0,0,120)
-introLabel.Position = UDim2.new(0,0,0.44,0)
-introLabel.BackgroundTransparency = 1
-introLabel.Font = Enum.Font.GothamBold
-introLabel.TextScaled = true
-introLabel.Text = "☁️ SKY-BASE-MAKER ☁️"
-introLabel.TextColor3 = Color3.fromRGB(255,255,255)
-introLabel.TextTransparency = 1
-introLabel.ZIndex = 51
-introLabel.Parent = introFrame
+-- Tạo một frame chứa toàn bộ nội dung loading để căn giữa dễ dàng
+local loadingContainer = Instance.new("Frame")
+loadingContainer.Name = "LoadingContainer"
+loadingContainer.Size = UDim2.new(0, 400, 0, 180)
+loadingContainer.Position = UDim2.new(0.5, -200, 0.5, -90) -- Căn giữa màn hình
+loadingContainer.BackgroundTransparency = 1
+loadingContainer.ZIndex = 51
+loadingContainer.Parent = introFrame
+
+-- Logo/Title chính
+local mainTitle = Instance.new("TextLabel")
+mainTitle.Name = "MainTitle"
+mainTitle.Size = UDim2.new(1, 0, 0, 60)
+mainTitle.Position = UDim2.new(0, 0, 0, 0)
+mainTitle.BackgroundTransparency = 1
+mainTitle.Font = Enum.Font.GothamBlack
+mainTitle.TextScaled = true
+mainTitle.Text = "☁️ SKY-BASE-MAKER ☁️"
+mainTitle.TextColor3 = Color3.fromRGB(200, 220, 255) -- Màu xanh trắng sáng
+mainTitle.TextTransparency = 1
+mainTitle.ZIndex = 52
+mainTitle.TextStrokeTransparency = 0.7
+mainTitle.TextStrokeColor3 = Color3.fromRGB(100, 100, 150)
+mainTitle.Parent = loadingContainer
+
+-- Khung checklist
+local checklistFrame = Instance.new("Frame")
+checklistFrame.Name = "Checklist"
+checklistFrame.Size = UDim2.new(1, -40, 0, 80)
+checklistFrame.Position = UDim2.new(0, 20, 0, 70)
+checklistFrame.BackgroundTransparency = 1
+checklistFrame.ZIndex = 52
+checklistFrame.Parent = loadingContainer
+
+-- Tạo 3 dòng checklist
+local checkLines = {}
+for i = 1, 3 do
+    local lineFrame = Instance.new("Frame")
+    lineFrame.Name = "Line" .. i
+    lineFrame.Size = UDim2.new(1, 0, 0, 20)
+    lineFrame.Position = UDim2.new(0, 0, 0, (i-1)*26)
+    lineFrame.BackgroundTransparency = 1
+    lineFrame.ZIndex = 52
+    lineFrame.Parent = checklistFrame
+
+    local checkBox = Instance.new("Frame")
+    checkBox.Name = "Box"
+    checkBox.Size = UDim2.new(0, 16, 0, 16)
+    checkBox.Position = UDim2.new(0, 0, 0, 2)
+    checkBox.BackgroundColor3 = Color3.fromRGB(60, 60, 80)
+    checkBox.BorderColor3 = Color3.fromRGB(120, 140, 180)
+    checkBox.ZIndex = 53
+    checkBox.Parent = lineFrame
+
+    local checkText = Instance.new("TextLabel")
+    checkText.Name = "Text"
+    checkText.Size = UDim2.new(1, -25, 1, 0)
+    checkText.Position = UDim2.new(0, 22, 0, 0)
+    checkText.BackgroundTransparency = 1
+    checkText.Font = Enum.Font.Gotham
+    checkText.Text = "Initializing system " .. i
+    checkText.TextColor3 = Color3.fromRGB(200, 200, 220)
+    checkText.TextSize = 14
+    checkText.TextXAlignment = Enum.TextXAlignment.Left
+    checkText.TextTransparency = 0.7
+    checkText.ZIndex = 53
+    checkText.Parent = lineFrame
+
+    checkLines[i] = {box = checkBox, text = checkText}
+end
+
+-- Biến để điều khiển animation
+local loadSteps = {
+    {"Loading core modules", 0.8},
+    {"Connecting to services", 1.2},
+    {"Preparing your sky base", 1.6}
+}
 
 -- ======= Main Panel (hidden until intro done) =======
 local frame = Instance.new("Frame")
 frame.Name = "MainPanel"
-frame.Size = UDim2.new(0, 300, 0, 160)
-frame.Position = UDim2.new(0.5, -150, 0.06, 0)
+frame.Size = UDim2.new(0, 320, 0, 190) -- Tăng chiều cao để chứa ô nhập
+frame.Position = UDim2.new(0.5, -160, 0.06, 0)
 frame.BackgroundColor3 = Color3.fromRGB(40,40,40)
 frame.BorderSizePixel = 0
 frame.ZIndex = 20
@@ -183,11 +248,40 @@ sliderValueLabel.TextColor3 = Color3.fromRGB(230,230,230)
 sliderValueLabel.TextSize = 14
 sliderValueLabel.Parent = sliderFrame
 
+-- Text input for precise height
+local heightInput = Instance.new("TextBox")
+heightInput.Name = "HeightInput"
+heightInput.Size = UDim2.new(0, 50, 0, 20)
+heightInput.Position = UDim2.new(0, 12, 0, 94)
+heightInput.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+heightInput.BorderSizePixel = 0
+heightInput.Font = Enum.Font.Gotham
+heightInput.PlaceholderText = "1-100"
+heightInput.Text = ""
+heightInput.TextColor3 = Color3.fromRGB(230, 230, 230)
+heightInput.TextSize = 14
+heightInput.TextXAlignment = Enum.TextXAlignment.Center
+heightInput.ZIndex = 21
+heightInput.Parent = frame
+
+local heightLabel = Instance.new("TextLabel")
+heightLabel.Name = "HeightLabel"
+heightLabel.Size = UDim2.new(0, 80, 0, 20)
+heightLabel.Position = UDim2.new(0, 66, 0, 94)
+heightLabel.BackgroundTransparency = 1
+heightLabel.Font = Enum.Font.Gotham
+heightLabel.Text = "Height (1-100)"
+heightLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+heightLabel.TextSize = 12
+heightLabel.TextXAlignment = Enum.TextXAlignment.Left
+heightLabel.ZIndex = 21
+heightLabel.Parent = frame
+
 -- Buttons row
 local buttonsFrame = Instance.new("Frame")
 buttonsFrame.Name = "ButtonsRow"
 buttonsFrame.Size = UDim2.new(1,-20,0,40)
-buttonsFrame.Position = UDim2.new(0,10,0,98)
+buttonsFrame.Position = UDim2.new(0,10,0,120) -- Điều chỉnh vị trí do thêm ô nhập
 buttonsFrame.BackgroundTransparency = 1
 buttonsFrame.Parent = frame
 
@@ -300,8 +394,9 @@ local function updateSliderFromX(inputX)
     local relX = math.clamp(inputX - barPos, 0, barSize)
     local halfBtn = math.floor(sliderButton.AbsoluteSize.X / 2)
     sliderButton.Position = UDim2.new(0, relX - halfBtn, 0.5, - (sliderButton.AbsoluteSize.Y / 2))
-    sliderValue = math.floor((relX / barSize) * 200) -- max 200
+    sliderValue = math.floor((relX / barSize) * 100) -- max 100
     sliderValueLabel.Text = "H: "..tostring(sliderValue)
+    heightInput.Text = tostring(sliderValue) -- Cập nhật ô nhập
     for part, _ in pairs(targets) do
         if part and part:IsA("BasePart") and not part.Locked then
             local sx, sy, sz = part.Size.X, part.Size.Y, part.Size.Z
@@ -312,11 +407,41 @@ local function updateSliderFromX(inputX)
     end
 end
 
+-- Cập nhật từ ô nhập
+local function updateFromInput()
+    local num = tonumber(heightInput.Text)
+    if num and num >= 1 and num <= 100 then
+        sliderValue = num
+        sliderValueLabel.Text = "H: "..tostring(sliderValue)
+        
+        -- Cập nhật vị trí slider
+        local barSize = sliderBar.AbsoluteSize.X
+        if barSize > 0 then
+            local relX = (num / 100) * barSize
+            local halfBtn = math.floor(sliderButton.AbsoluteSize.X / 2)
+            sliderButton.Position = UDim2.new(0, relX - halfBtn, 0.5, - (sliderButton.AbsoluteSize.Y / 2))
+        end
+        
+        -- Áp dụng cho tất cả parts
+        for part, _ in pairs(targets) do
+            if part and part:IsA("BasePart") and not part.Locked then
+                local sx, sy, sz = part.Size.X, part.Size.Y, part.Size.Z
+                pcall(function()
+                    part.Size = Vector3.new(sx, math.max(1, sliderValue), sz)
+                end)
+            end
+        end
+    else
+        heightInput.Text = tostring(sliderValue) -- Khôi phục giá trị cũ nếu nhập sai
+    end
+end
+
 -- init slider pos
 task.defer(function()
     safeWait(0.05)
     sliderButton.Position = UDim2.new(0, -10, 0.5, -10)
     sliderValueLabel.Text = "H: 0"
+    heightInput.Text = "0"
 end)
 
 -- ======= Drag (titleBar) =======
@@ -366,6 +491,11 @@ sliderBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         updateSliderFromX(input.Position.X)
     end
+end)
+
+-- ======= Text input handling =======
+heightInput.FocusLost:Connect(function(enterPressed)
+    updateFromInput()
 end)
 
 -- ======= Add / Remove buttons =======
@@ -420,24 +550,63 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ======= Intro Tween then show UI =======
+-- ======= Intro Tween & Loading Animation =======
 do
-    local tweenInInfo = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tweenTextInfo = TweenInfo.new(0.6, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out)
+    local tweenInInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
+    local tweenOutInfo = TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.In)
+    local quickFade = TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
+    -- 1. Fade in background và main title
     local t1 = TweenService:Create(introFrame, tweenInInfo, { BackgroundTransparency = 0 })
-    local t2 = TweenService:Create(introLabel, tweenTextInfo, { TextTransparency = 0 })
+    local t2 = TweenService:Create(mainTitle, quickFade, { TextTransparency = 0 })
 
-    t1:Play(); t2:Play(); t2.Completed:Wait()
-    safeWait(1.3)
-    local t3 = TweenService:Create(introLabel, tweenInInfo, { TextTransparency = 1 })
-    t3:Play(); t3.Completed:Wait()
-    local t4 = TweenService:Create(introFrame, tweenInInfo, { BackgroundTransparency = 1 })
+    t1:Play(); t2:Play()
+    t1.Completed:Wait()
+
+    -- 2. Lặp qua các bước loading và tick checklist
+    for i, stepInfo in ipairs(loadSteps) do
+        local text, waitTime = stepInfo[1], stepInfo[2]
+        local line = checkLines[i]
+
+        -- Cập nhật text
+        line.text.Text = text
+        local tText = TweenService:Create(line.text, quickFade, {TextTransparency = 0})
+        tText:Play()
+
+        -- Giả lập công việc đang làm
+        safeWait(waitTime)
+
+        -- Tick hoàn thành
+        local tBox = TweenService:Create(line.box, quickFade, {BackgroundColor3 = Color3.fromRGB(120, 220, 120)})
+        tBox:Play()
+        safeWait(0.2)
+    end
+
+    safeWait(0.5) -- Dừng một chút để người dùng nhìn thấy đã hoàn thành
+
+    -- 3. Fade out toàn bộ intro
+    local t4 = TweenService:Create(mainTitle, tweenOutInfo, { TextTransparency = 1 })
     t4:Play(); t4.Completed:Wait()
 
-    if introFrame and introFrame.Parent then introFrame:Destroy() end
+    for _, line in pairs(checkLines) do
+        local tLine = TweenService:Create(line.text, quickFade, {TextTransparency = 1})
+        local tBox = TweenService:Create(line.box, quickFade, {BackgroundTransparency = 1})
+        tLine:Play(); tBox:Play()
+    end
+    safeWait(0.3)
+
+    local t6 = TweenService:Create(introFrame, tweenOutInfo, { BackgroundTransparency = 1 })
+    t6:Play(); t6.Completed:Wait()
+
+    -- 4. Dọn dẹp và hiện UI chính
+    if introFrame and introFrame.Parent then
+        introFrame:Destroy()
+    end
     frame.Visible = true
     toggleButton.Visible = true
+
+    -- Thông báo hoàn thành
+    tryNotify("SKY BASE MAKER", "Ready to build!", 2)
 end
 
 -- ======= Done =======
