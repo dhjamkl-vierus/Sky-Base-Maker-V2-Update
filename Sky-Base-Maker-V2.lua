@@ -357,7 +357,7 @@ end
 
 -- NEW: Button functions for +/-
 local function increaseHeight()
-    local newValue = math.min(sliderValue + 5, 100)
+    local newValue = math.min(sliderValue + , 100)
     sliderValue = newValue
     valueDisplay.Text = tostring(sliderValue)
     heightInput.Text = tostring(sliderValue)
@@ -378,7 +378,7 @@ local function increaseHeight()
 end
 
 local function decreaseHeight()
-    local newValue = math.max(sliderValue - 5, 1)
+    local newValue = math.max(sliderValue - 1, 1)
     sliderValue = newValue
     valueDisplay.Text = tostring(sliderValue)
     heightInput.Text = tostring(sliderValue)
@@ -471,3 +471,4 @@ RunService.RenderStepped:Connect(function()
         end 
     end 
 end)
+
