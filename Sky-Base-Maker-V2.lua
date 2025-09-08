@@ -1,4 +1,4 @@
--- ======= LOADING ANIMATION =======
+-- ======= LOADING ANIMATION (5 SECONDS) =======
 local StarterGui = game:GetService("StarterGui")
 local Lighting = game:GetService("Lighting")
 local Players = game:GetService("Players")
@@ -45,8 +45,10 @@ subText.BackgroundTransparency = 1
 subText.ZIndex = 101
 subText.Parent = loadingFrame
 
--- Animation loading
+-- Animation loading (5 giây)
 spawn(function()
+    wait(5) -- Chờ 5 giây như yêu cầu
+    
     local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
     
     -- Fade in
@@ -110,8 +112,8 @@ screenGui.Parent = playerGui
 
 -- Modern frame design
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 200)  -- Increased height for input box
-frame.Position = UDim2.new(0.5, -150, 0.1, 0)
+frame.Size = UDim2.new(0, 320, 0, 220)  -- Increased size for new buttons
+frame.Position = UDim2.new(0.5, -160, 0.1, 0)
 frame.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 frame.BorderSizePixel = 0
 frame.Active = true
@@ -187,20 +189,41 @@ inputCorner.CornerRadius = UDim.new(0, 6)
 inputCorner.Parent = inputFrame
 
 local heightInput = Instance.new("TextBox")
-heightInput.Size = UDim2.new(0.5, -5, 1, 0)
+heightInput.Size = UDim2.new(0.4, -5, 1, 0)
 heightInput.Position = UDim2.new(0, 5, 0, 0)
 heightInput.Text = "0"
-heightInput.PlaceholderText = "Enter height (1-100)"
+heightInput.PlaceholderText = "1-100"
 heightInput.TextColor3 = Color3.fromRGB(220, 220, 220)
 heightInput.BackgroundTransparency = 1
 heightInput.Font = Enum.Font.Gotham
 heightInput.TextSize = 14
 heightInput.Parent = inputFrame
 
+-- NEW: + and - buttons
+local minusButton = Instance.new("TextButton")
+minusButton.Size = UDim2.new(0, 30, 1, 0)
+minusButton.Position = UDim2.new(0.4, 5, 0, 0)
+minusButton.Text = "-"
+minusButton.TextColor3 = Color3.fromRGB(220, 220, 220)
+minusButton.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+minusButton.Font = Enum.Font.GothamBold
+minusButton.TextSize = 18
+minusButton.Parent = inputFrame
+
+local plusButton = Instance.new("TextButton")
+plusButton.Size = UDim2.new(0, 30, 1, 0)
+plusButton.Position = UDim2.new(0.4, 40, 0, 0)
+plusButton.Text = "+"
+plusButton.TextColor3 = Color3.fromRGB(220, 220, 220)
+plusButton.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+plusButton.Font = Enum.Font.GothamBold
+plusButton.TextSize = 18
+plusButton.Parent = inputFrame
+
 local inputLabel = Instance.new("TextLabel")
-inputLabel.Size = UDim2.new(0.5, -5, 1, 0)
-inputLabel.Position = UDim2.new(0.5, 0, 0, 0)
-inputLabel.Text = "Height Input"
+inputLabel.Size = UDim2.new(0.2, -5, 1, 0)
+inputLabel.Position = UDim2.new(0.4, 75, 0, 0)
+inputLabel.Text = "Height"
 inputLabel.TextColor3 = Color3.fromRGB(180, 180, 180)
 inputLabel.BackgroundTransparency = 1
 inputLabel.Font = Enum.Font.Gotham
@@ -237,7 +260,7 @@ removeCorner.CornerRadius = UDim.new(0, 6)
 removeCorner.Parent = removeButton
 
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 80, 0, 30)
+toggleButton.Size = UDim2.new(0, 100, 0, 30)
 toggleButton.Position = UDim2.new(0, 10, 0, 170)
 toggleButton.Text = "😙 TOGGLE"
 toggleButton.TextColor3 = Color3.fromRGB(240, 240, 240)
@@ -255,33 +278,9 @@ local dragging = false
 local sliderValue = 0 
 local lastCheck = 0
 
--- Modern drag implementation (better than Draggable)
-local dragStart, startPos
-frame.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragStart = input.Position
-        startPos = frame.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
-end)
-
-frame.InputChanged:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseMovement then
-        dragInput = input
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if input == dragInput and dragging then
-        local delta = input.Position - dragStart
-        frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, 
-                                  startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
+-- Kéo GUI bằng tay (giữ nguyên từ script gốc)
+frame.Active = true
+frame.Draggable = true
 
 local function getFootPart() 
     local character = LocalPlayer.Character 
@@ -300,7 +299,7 @@ local function ensureHighlight(part)
         highlight = Instance.new("Highlight") 
         highlight.Name = "PersistentHighlight" 
         highlight.Adornee = part 
-        highlight.FillColor = Color3.fromRGB(220, 220, 220)  -- Light white
+        highlight.FillColor = Color3.fromRGB(220, 220, 220)
         highlight.FillTransparency = 0.4
         highlight.OutlineColor = Color3.fromRGB(255, 255, 255) 
         highlight.OutlineTransparency = 0 
@@ -352,7 +351,50 @@ local function updateFromInput()
             end 
         end
     else
-        heightInput.Text = tostring(sliderValue)  -- Reset to current value
+        heightInput.Text = tostring(sliderValue)
+    end
+end
+
+-- NEW: Button functions for +/-
+local function increaseHeight()
+    local newValue = math.min(sliderValue + 5, 100)
+    sliderValue = newValue
+    valueDisplay.Text = tostring(sliderValue)
+    heightInput.Text = tostring(sliderValue)
+    
+    -- Update slider position
+    local barSize = sliderBar.AbsoluteSize.X
+    if barSize > 0 then
+        local relativeX = (sliderValue / 100) * barSize
+        sliderButton.Position = UDim2.new(0, relativeX - 10, 0.5, -10)
+    end
+    
+    -- Update parts
+    for part, _ in pairs(targets) do 
+        if part and part:IsA("BasePart") then 
+            part.Size = Vector3.new(part.Size.X, sliderValue, part.Size.Z) 
+        end 
+    end
+end
+
+local function decreaseHeight()
+    local newValue = math.max(sliderValue - 5, 1)
+    sliderValue = newValue
+    valueDisplay.Text = tostring(sliderValue)
+    heightInput.Text = tostring(sliderValue)
+    
+    -- Update slider position
+    local barSize = sliderBar.AbsoluteSize.X
+    if barSize > 0 then
+        local relativeX = (sliderValue / 100) * barSize
+        sliderButton.Position = UDim2.new(0, relativeX - 10, 0.5, -10)
+    end
+    
+    -- Update parts
+    for part, _ in pairs(targets) do 
+        if part and part:IsA("BasePart") then 
+            part.Size = Vector3.new(part.Size.X, sliderValue, part.Size.Z) 
+        end 
     end
 end
 
@@ -383,6 +425,15 @@ end)
 -- NEW: Text input event
 heightInput.FocusLost:Connect(function()
     updateFromInput()
+end)
+
+-- NEW: + and - button events
+plusButton.MouseButton1Click:Connect(function()
+    increaseHeight()
+end)
+
+minusButton.MouseButton1Click:Connect(function()
+    decreaseHeight()
 end)
 
 addButton.MouseButton1Click:Connect(function() 
