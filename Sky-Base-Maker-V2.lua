@@ -32,6 +32,7 @@ loadingText.TextScaled = true
 loadingText.Font = Enum.Font.GothamBlack
 loadingText.BackgroundTransparency = 1
 loadingText.ZIndex = 101
+loadingText.TextTransparency = 0
 loadingText.Parent = loadingFrame
 
 local subText = Instance.new("TextLabel")
@@ -43,21 +44,12 @@ subText.TextScaled = true
 subText.Font = Enum.Font.Gotham
 subText.BackgroundTransparency = 1
 subText.ZIndex = 101
+subText.TextTransparency = 0
 subText.Parent = loadingFrame
 
 -- Animation loading (5 giây)
-spawn(function()
-    wait(5) -- Chờ 5 giây như yêu cầu
-    
-    local tweenInfo = TweenInfo.new(1.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    
-    -- Fade in
-    local textTween = TweenService:Create(loadingText, tweenInfo, {TextTransparency = 0})
-    local subTextTween = TweenService:Create(subText, tweenInfo, {TextTransparency = 0})
-    textTween:Play()
-    subTextTween:Play()
-    
-    wait(2)
+task.spawn(function()
+    task.wait(2) -- Hiển thị văn bản trong 2 giây
     
     -- Fade out
     local fadeOut = TweenService:Create(loadingFrame, TweenInfo.new(1.5), {BackgroundTransparency = 1})
@@ -68,9 +60,8 @@ spawn(function()
     textFadeOut:Play()
     subTextFadeOut:Play()
     
-    fadeOut.Completed:Connect(function()
-        loadingGui:Destroy()
-    end)
+    fadeOut.Completed:Wait()
+    loadingGui:Destroy()
 end)
 
 -- ======= ORIGINAL FUNCTIONALITY WITH ENHANCED GUI =======
@@ -288,7 +279,7 @@ local function getFootPart()
     local root = character:FindFirstChild("HumanoidRootPart") 
     if not root then return nil end 
     local ray = Ray.new(root.Position, Vector3.new(0, -5, 0)) 
-    local part = workspace:FindPartOnRay(ray, character) 
+    local part, position = workspace:FindPartOnRay(ray, character) 
     return part 
 end
 
@@ -357,7 +348,7 @@ end
 
 -- NEW: Button functions for +/-
 local function increaseHeight()
-    local newValue = math.min(sliderValue + , 100)
+    local newValue = math.min(sliderValue + 1, 100)  -- Đã sửa lỗi thiếu giá trị
     sliderValue = newValue
     valueDisplay.Text = tostring(sliderValue)
     heightInput.Text = tostring(sliderValue)
@@ -471,5 +462,3 @@ RunService.RenderStepped:Connect(function()
         end 
     end 
 end)
-
-
